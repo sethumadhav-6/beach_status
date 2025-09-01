@@ -1,664 +1,4 @@
-// Certified Blue Flag beaches layer
-            certifiedLayer = L.layerGroup().addTo(map);
-            
-            const certifiedBeaches = [
-                { name: 'Kappad Beach', coords: [11.3908, 75.7097] },
-                { name: 'Chal Beach', coords: [12.0077, 75.3447] }
-            ];
-            
-            certifiedBeaches.forEach(beach => {
-                L.marker(beach.coords, {
-                    icon: L.divIcon({
-                        className: 'certified-marker',
-                        html: '🏆',
-                        iconSize: [30, 30]
-                    })
-                }).bindPopup(`✅ ${beach.name}<br>CERTIFIED Blue Flag Beach`).addTo(certifiedLayer);
-            });
-        }
-
-        // Create beach width indicator
-        function createWidthIndicator(beach) {
-            const widthColor = beach.beachWidth >= 80 ? '#28a745' :
-                              beach.beachWidth >= 60 ? '#fd7e14' :
-                              beach.beachWidth >= 40 ? '#dc3545' : '#6c757d';
-            
-            // Create a line parallel to the shore to represent beach width
-            const lat = beach.coordinates[0];
-            const lng = beach.coordinates[1];
-            const widthInDegrees = beach.beachWidth * 0.00001; // Approximate conversion for visualization
-            
-            const widthLine = L.polyline([
-                [lat + widthInDegrees/2, lng],
-                [lat - widthInDegrees/2, lng]
-            ], {
-                color: widthColor,
-                weight: 4,
-                opacity: 0.7,
-                dashArray: '10, 5'
-            }).bindPopup(`${beach.name}<br>Beach Width: ${beach.beachWidth}m<br>Width Score: ${beach.widthScore}/100`);
-
-            return widthLine;
-        }
-
-        // Create beach marker with custom styling
-        function createBeachMarker(beach, index) {
-            const score = beach.overallScore;
-            let color, icon;
-            
-            if (score >= 80) {
-                color = '#28a745';
-                icon = '⭐';
-            } else if (score >= 70) {
-                color = '#fd7e14';
-                icon = '🏖️';
-            } else if (score >= 60) {
-                color = '#dc3545';
-                icon = '⚠️';
-            } else {
-                color = '#6c757d';
-                icon = '❌';
-            }
-
-            const fieldVerifiedIcon = beach.fieldVerified ? '✅' : '';
-
-            const marker = L.marker(beach.coordinates, {
-                icon: L.divIcon({
-                    className: 'beach-marker',
-                    html: `<div style="background: ${color}; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 14px; position: relative;">${icon}<span style="position: absolute; top: -8px; right: -8px; font-size: 10px;">${fieldVerifiedIcon}</span></div>`,
-                    iconSize: [35, 35],
-                    iconAnchor: [17, 17]
-                })
-            });
-
-            // Create popup content
-            const popupContent = createPopupContent(beach);
-            marker.bindPopup(popupContent, { maxWidth: 400 });
-
-            // Add click event
-            marker.on('click', () => {
-                selectBeach(index);
-                showBeachInfo(beach);
-            });
-
-            return marker;
-        }
-
-        // Create detailed popup content
-        function createPopupContent(beach) {
-            const scoreClass = beach.overallScore >= 80 ? 'score-excellent' :
-                              beach.overallScore >= 70 ? 'score-good' :
-                              beach.overallScore >= 60 ? 'score-poor' : 'score-bad';
-
-            const phoneInfo = beach.phone ? `📞 ${beach.phone}` : '📞 No contact available';
-            const fieldStatus = beach.fieldVerified ? '<div class="field-note">✅ Field Verified Data</div>' : '';
-            const widthStatus = beach.beachWidth >= 80 ? 'Excellent width' :
-                               beach.beachWidth >= 60 ? 'Good width' :
-                               beach.beachWidth >= 40 ? 'Limited width' : 'Insufficient width';
-
-            return `
-                <div class="popup-content">
-                    <div class="popup-header">
-                        <div class="popup-title">${beach.name}</div>
-                        <div class="popup-subtitle">${beach.district} District • ${beach.type.charAt(0).toUpperCase() + beach.type.slice(1)} Beach</div>
-                        <div style="font-size: 11px; margin-top: 3px;">${phoneInfo}</div>
-                    </div>
-                    
-                    ${fieldStatus}
-                    
-                    <div class="score-badge ${scoreClass}">
-                        Score: ${beach.overallScore}/100
-                    </div>
-                    
-                    <div style="margin: 8px 0; color: #666; font-size: 13px;">
-                        ${beach.status}
-                    </div>
-                    
-                    <div style="margin: 10px 0;">
-                        <strong>Beach Width Analysis:</strong><br>
-                        <span style="color: ${beach.beachWidth >= 80 ? '#28a745' : beach.beachWidth >= 60 ? '#fd7e14' : beach.beachWidth >= 40 ? '#dc3545' : '#6c757d'}; font-weight: bold;">
-                            ${beach.beachWidth}m (${widthStatus})
-                        </span>
-                    </div>
-                    
-                    <div style="margin: 10px 0;">
-                        <strong>Component Scores:</strong>
-                        <div class="component-grid">
-                            <div class="component-item">🌊 Water Quality: ${beach.components.waterQuality}/100</div>
-                            <div class="component-item">🌿 Environment: ${beach.components.environmental}/100</div>
-                            <div class="component-item">⚠️ Safety: ${beach.components.safety}/100</div>
-                            <div class="component-item">🏗️ Infrastructure: ${beach.components.infrastructure}/100</div>
-                            <div class="component-item">📏 Beach Width: ${beach.components.beachWidth}/100</div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin: 10px 0;">
-                        <strong>Water Quality Analysis:</strong>
-                        <div style="font-size: 11px; margin-top: 5px;">
-                            E. coli: ${beach.bacterialAnalysis.eColi95th.toFixed(1)} cfu/100ml 
-                            <span style="color: ${beach.bacterialAnalysis.eColiCompliant ? 'green' : 'red'}; font-weight: bold;">
-                                (${beach.bacterialAnalysis.eColiCompliant ? '✓' : '✗'} ≤250)
-                            </span><br>
-                            Enterococci: ${beach.bacterialAnalysis.enterococci95th.toFixed(1)} cfu/100ml 
-                            <span style="color: ${beach.bacterialAnalysis.enterococciCompliant ? 'green' : 'red'}; font-weight: bold;">
-                                (${beach.bacterialAnalysis.enterococciCompliant ? '✓' : '✗'} ≤100)
-                            </span>
-                        </div>
-                    </div>
-                    
-                    ${beach.fieldNotes ? `
-                        <div style="margin: 10px 0;">
-                            <strong>Field Notes:</strong>
-                            <div style="font-size: 11px; padding: 5px; background: #e8f5e8; border-radius: 3px; margin-top: 3px;">
-                                ${beach.fieldNotes}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <div style="margin: 10px 0;">
-                        <strong>Address:</strong> ${beach.address}<br>
-                        <strong>Coordinates:</strong> ${beach.coordinates[0].toFixed(4)}°N, ${beach.coordinates[1].toFixed(4)}°E
-                    </div>
-                    
-                    ${beach.criticalIssues.length > 0 ? `
-                        <div style="margin: 10px 0;">
-                            <strong style="color: #dc3545;">Critical Issues:</strong>
-                            <ul style="margin: 5px 0; padding-left: 15px; font-size: 11px;">
-                                ${beach.criticalIssues.map(issue => `<li>${issue}</li>`).join('')}
-                            </ul>
-                        </div>
-                    ` : ''}
-                    
-                    <div style="margin: 10px 0;">
-                        <strong>Updated Recommendations:</strong>
-                        <ul style="margin: 5px 0; padding-left: 15px; font-size: 11px;">
-                            ${beach.recommendations.slice(0, 3).map(rec => `<li>${rec}</li>`).join('')}
-                        </ul>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Populate beach list in sidebar
-        function populateBeachList() {
-            const beachList = document.getElementById('beachList');
-            beachList.innerHTML = '';
-
-            beachesData.forEach((beach, index) => {
-                const scoreClass = beach.overallScore >= 80 ? 'excellent' :
-                                 beach.overallScore >= 70 ? 'good' :
-                                 beach.overallScore >= 60 ? 'poor' : 'bad';
-
-                const fieldIcon = beach.fieldVerified ? '✅ ' : '';
-                const widthInfo = `📏 ${beach.beachWidth}m`;
-
-                const beachCard = document.createElement('div');
-                beachCard.className = `beach-card ${scoreClass}`;
-                beachCard.innerHTML = `
-                    <div class="beach-name">${fieldIcon}${beach.name}</div>
-                    <div class="beach-score" style="color: ${
-                        beach.overallScore >= 80 ? '#28a745' :
-                        beach.overallScore >= 70 ? '#fd7e14' :
-                        beach.overallScore >= 60 ? '#dc3545' : '#6c757d'
-                    }">${beach.overallScore}/100</div>
-                    <div class="beach-status">${beach.status}</div>
-                    <div class="beach-district">${beach.district} District${beach.phone ? ` • 📞 ${beach.phone}` : ''}</div>
-                    <div class="beach-width">${widthInfo} • Width Score: ${beach.widthScore}/100</div>
-                `;
-
-                beachCard.onclick = () => {
-                    selectBeach(index);
-                    map.setView(beach.coordinates, 14);
-                    showBeachInfo(beach);
-                };
-
-                beachList.appendChild(beachCard);
-            });
-        }
-
-        // Select beach function
-        function selectBeach(index) {
-            // Remove previous selection
-            document.querySelectorAll('.beach-card').forEach(card => {
-                card.classList.remove('selected');
-            });
-
-            // Add selection to current beach
-            document.querySelectorAll('.beach-card')[index].classList.add('selected');
-            selectedBeach = index;
-        }
-
-        // Show beach information in info panel
-        function showBeachInfo(beach) {
-            const infoPanel = document.getElementById('infoPanel');
-            const content = document.getElementById('infoPanelContent');
-            
-            const fieldStatus = beach.fieldVerified ? '<p style="color: #28a745; font-weight: bold;">✅ Field Verified</p>' : '<p style="color: #666;">📋 Desk Assessment</p>';
-            
-            content.innerHTML = `
-                <h3>${beach.name}</h3>
-                ${fieldStatus}
-                <p><strong>District:</strong> ${beach.district}</p>
-                <p><strong>Type:</strong> ${beach.type.charAt(0).toUpperCase() + beach.type.slice(1)}</p>
-                <p><strong>Beach Width:</strong> ${beach.beachWidth}m (Score: ${beach.widthScore}/100)</p>
-                <p><strong>Overall Score:</strong> ${beach.overallScore}/100</p>
-                <p><strong>Status:</strong> ${beach.status}</p>
-                
-                <h4>Component Scores:</h4>
-                <ul>
-                    <li>Water Quality: ${beach.components.waterQuality}/100</li>
-                    <li>Environmental Management: ${beach.components.environmental}/100</li>
-                    <li>Safety & Services: ${beach.components.safety}/100</li>
-                    <li>Infrastructure: ${beach.components.infrastructure}/100</li>
-                    <li>Beach Width: ${beach.components.beachWidth}/100</li>
-                </ul>
-                
-                <h4>Water Quality Details:</h4>
-                <p>E. coli (95th percentile): ${beach.bacterialAnalysis.eColi95th.toFixed(1)} cfu/100ml</p>
-                <p>Enterococci (95th percentile): ${beach.bacterialAnalysis.enterococci95th.toFixed(1)} cfu/100ml</p>
-                
-                ${beach.fieldNotes ? `<h4>Field Notes:</h4><p style="background: #e8f5e8; padding: 8px; border-radius: 4px; font-size: 13px;">${beach.fieldNotes}</p>` : ''}
-                
-                <h4>Address:</h4>
-                <p>${beach.address}</p>
-                
-                ${beach.phone ? `<h4>Contact:</h4><p>${beach.phone}</p>` : ''}
-            `;
-            
-            infoPanel.classList.add('active');
-        }
-
-        // Close info panel
-        function closeInfoPanel() {
-            document.getElementById('infoPanel').classList.remove('active');
-        }
-
-        // Update statistics
-        function updateStatistics() {
-            const stats = calculateStatistics();
-            const container = document.getElementById('statisticsContainer');
-            
-            container.innerHTML = `
-                <div class="stat-item">
-                    <span class="stat-label">Total Beaches:</span>
-                    <span class="stat-value">${stats.totalBeaches}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Field Verified:</span>
-                    <span class="stat-value">${stats.fieldVerified}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Average Score:</span>
-                    <span class="stat-value">${stats.averageScore}/100</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Average Width:</span>
-                    <span class="stat-value">${stats.averageWidth}m</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Blue Flag Eligible:</span>
-                    <span class="stat-value">${stats.excellent}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Potential Candidates:</span>
-                    <span class="stat-value">${stats.good}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Need Improvement:</span>
-                    <span class="stat-value">${stats.poor}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Width ≥80m:</span>
-                    <span class="stat-value">${stats.excellentWidth}</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Width <40m:</span>
-                    <span class="stat-value">${stats.poorWidth}</span>
-                </div>
-            `;
-
-            // Update chart
-            updateScoreChart(stats);
-        }
-
-        // Calculate statistics
-        function calculateStatistics() {
-            const totalBeaches = beachesData.length;
-            const fieldVerified = beachesData.filter(beach => beach.fieldVerified).length;
-            const averageScore = (beachesData.reduce((sum, beach) => sum + beach.overallScore, 0) / totalBeaches).toFixed(1);
-            const averageWidth = Math.round(beachesData.reduce((sum, beach) => sum + beach.beachWidth, 0) / totalBeaches);
-            
-            const excellent = beachesData.filter(beach => beach.overallScore >= 80).length;
-            const good = beachesData.filter(beach => beach.overallScore >= 70 && beach.overallScore < 80).length;
-            const poor = beachesData.filter(beach => beach.overallScore >= 60 && beach.overallScore < 70).length;
-            const bad = beachesData.filter(beach => beach.overallScore < 60).length;
-            
-            const excellentWidth = beachesData.filter(beach => beach.beachWidth >= 80).length;
-            const poorWidth = beachesData.filter(beach => beach.beachWidth < 40).length;
-            
-            const waterQualityCompliant = beachesData.filter(beach => 
-                beach.bacterialAnalysis.eColiCompliant && beach.bacterialAnalysis.enterococciCompliant
-            ).length;
-            
-            const withContact = beachesData.filter(beach => beach.phone).length;
-            const ernakulamCount = beachesData.filter(beach => beach.district === 'Ernakulam').length;
-            const alappuzhaCount = beachesData.filter(beach => beach.district === 'Alappuzha').length;
-
-            return {
-                totalBeaches,
-                fieldVerified,
-                averageScore,
-                averageWidth,
-                excellent,
-                good,
-                poor,
-                bad,
-                excellentWidth,
-                poorWidth,
-                waterQualityCompliant,
-                withContact,
-                ernakulamCount,
-                alappuzhaCount
-            };
-        }
-
-        // Update score chart
-        function updateScoreChart(stats) {
-            const ctx = document.getElementById('scoreChart').getContext('2d');
-            
-            // Destroy existing chart if it exists
-            if (window.beachChart) {
-                window.beachChart.destroy();
-            }
-
-            window.beachChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Excellent (≥80)', 'Good (70-79)', 'Poor (60-69)', 'Bad (<60)'],
-                    datasets: [{
-                        data: [stats.excellent, stats.good, stats.poor, stats.bad],
-                        backgroundColor: ['#28a745', '#fd7e14', '#dc3545', '#6c757d'],
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                font: {
-                                    size: 10
-                                },
-                                padding: 10
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Layer control functions
-        function toggleLayer(layerName, checkbox) {
-            const isChecked = checkbox.checked;
-            
-            switch(layerName) {
-                case 'beach':
-                    if (isChecked) {
-                        map.addLayer(beachLayer);
-                    } else {
-                        map.removeLayer(beachLayer);
-                    }
-                    break;
-                case 'heatmap':
-                    if (isChecked) {
-                        map.addLayer(heatmapLayer);
-                    } else {
-                        map.removeLayer(heatmapLayer);
-                    }
-                    break;
-                case 'width':
-                    if (isChecked) {
-                        map.addLayer(widthLayer);
-                    } else {
-                        map.removeLayer(widthLayer);
-                    }
-                    break;
-                case 'district':
-                    if (isChecked) {
-                        map.addLayer(districtLayer);
-                    } else {
-                        map.removeLayer(districtLayer);
-                    }
-                    break;
-                case 'certified':
-                    if (isChecked) {
-                        map.addLayer(certifiedLayer);
-                    } else {
-                        map.removeLayer(certifiedLayer);
-                    }
-                    break;
-                case 'satellite':
-                    if (isChecked) {
-                        map.addLayer(satelliteLayer);
-                    } else {
-                        map.removeLayer(satelliteLayer);
-                    }
-                    break;
-            }
-        }
-
-        // Analysis tool functions
-        function showStatistics() {
-            const stats = calculateStatistics();
-            alert(`📊 Updated Beach Assessment Statistics:
-
-Total Beaches: ${stats.totalBeaches}
-Field Verified: ${stats.fieldVerified}
-Average Score: ${stats.averageScore}/100
-Average Beach Width: ${stats.averageWidth}m
-
-UPDATED RESULTS:
-Blue Flag Eligible (≥80): ${stats.excellent}
-Potential Candidates (70-79): ${stats.good}
-Need Improvement (60-69): ${stats.poor}
-Not Eligible (<60): ${stats.bad}
-
-BEACH WIDTH ANALYSIS:
-Excellent Width (≥80m): ${stats.excellentWidth}
-Poor Width (<40m): ${stats.poorWidth}
-
-MAJOR UPDATE:
-✅ Kuzhuppilly Beach upgraded from 63.7 to 78.4 based on field verification
-📏 Beach width now included as critical assessment parameter
-
-Water Quality Compliant: ${beachesData.filter(beach => beach.bacterialAnalysis.eColiCompliant && beach.bacterialAnalysis.enterococciCompliant).length}
-
-Top Beach: ${beachesData.reduce((prev, current) => (prev.overallScore > current.overallScore) ? prev : current).name} (${beachesData.reduce((prev, current) => (prev.overallScore > current.overallScore) ? prev : current).overallScore}/100)
-Widest Beach: ${beachesData.reduce((prev, current) => (prev.beachWidth > current.beachWidth) ? prev : current).name} (${beachesData.reduce((prev, current) => (prev.beachWidth > current.beachWidth) ? prev : current).beachWidth}m)
-            `);
-        }
-
-        function showFieldNotes() {
-            const fieldVerified = beachesData.filter(beach => beach.fieldVerified);
-            let message = "📝 Field Verification Notes:\n\n";
-            
-            if (fieldVerified.length === 0) {
-                message += "No field verified data available yet.";
-            } else {
-                fieldVerified.forEach(beach => {
-                    message += `✅ ${beach.name}:\n`;
-                    message += `   Score: ${beach.overallScore}/100\n`;
-                    message += `   Width: ${beach.beachWidth}m\n`;
-                    message += `   Notes: ${beach.fieldNotes}\n\n`;
-                });
-            }
-            
-            message += "\n🎯 Key Finding: Kuzhuppilly Beach conditions were significantly better than desk assessment suggested, leading to a major score improvement from 63.7 to 78.4.";
-            
-            alert(message);
-        }
-
-        function measureDistance() {
-            if (measureControl) {
-                map.removeControl(measureControl);
-                measureControl = null;
-            } else {
-                measureControl = new L.Control.Draw({
-                    draw: {
-                        polyline: {
-                            metric: true
-                        },
-                        polygon: false,
-                        rectangle: false,
-                        circle: false,
-                        marker: false,
-                        circlemarker: false
-                    },
-                    edit: false
-                });
-                map.addControl(measureControl);
-            }
-        }
-
-        function bufferAnalysis() {
-            if (selectedBeach !== null) {
-                const beach = beachesData[selectedBeach];
-                const center = beach.coordinates;
-                
-                // Create buffer zones
-                const buffers = [1000, 2000, 5000]; // 1km, 2km, 5km
-                const colors = ['#ff0000', '#ff8800', '#ffff00'];
-                const opacities = [0.3, 0.2, 0.1];
-                
-                buffers.forEach((radius, index) => {
-                    L.circle(center, {
-                        radius: radius,
-                        color: colors[index],
-                        fillColor: colors[index],
-                        fillOpacity: opacities[index],
-                        weight: 2,
-                        dashArray: '5, 5'
-                    }).bindPopup(`Buffer Zone: ${radius/1000}km from ${beach.name}<br>Beach Width: ${beach.beachWidth}m`).addTo(map);
-                });
-                
-                map.setView(center, 11);
-                alert(`Buffer analysis created for ${beach.name}\nZones: 1km, 2km, 5km\nBeach Width: ${beach.beachWidth}m`);
-            } else {
-                alert('Please select a beach first by clicking on a beach marker or card.');
-            }
-        }
-
-        function exportData() {
-            // Create CSV data with updated fields
-            let csvContent = "Beach Name,District,Latitude,Longitude,Overall Score,Beach Width (m),Width Score,Field Verified,Status,Water Quality,Environmental,Safety,Infrastructure,E.coli Compliant,Enterococci Compliant,Phone,Address,Field Notes\n";
-            
-            beachesData.forEach(beach => {
-                csvContent += `"${beach.name}","${beach.district}",${beach.coordinates[0]},${beach.coordinates[1]},${beach.overallScore},${beach.beachWidth},${beach.widthScore},${beach.fieldVerified},"${beach.status}",${beach.components.waterQuality},${beach.components.environmental},${beach.components.safety},${beach.components.infrastructure},${beach.bacterialAnalysis.eColiCompliant},${beach.bacterialAnalysis.enterococciCompliant},"${beach.phone}","${beach.address}","${beach.fieldNotes || ''}"\n`;
-            });
-
-            // Create and download file
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `kerala_beaches_updated_assessment_${new Date().toISOString().split('T')[0]}.csv`;
-            a.click();
-            window.URL.revokeObjectURL(url);
-            
-            alert('Updated beach assessment data exported as CSV file!\nIncludes beach width analysis and field verification status.');
-        }
-
-        // Toolbar functions
-        function resetView() {
-            map.setView([9.8, 76.3], 9);
-            closeInfoPanel();
-        }
-
-        function toggleFullscreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-            } else {
-                document.exitFullscreen();
-            }
-        }
-
-        function showHelp() {
-            alert(`🏖️ Kerala Beach WebGIS Help (Updated)
-
-🗺️ Map Navigation:
-• Click and drag to pan
-• Use mouse wheel or +/- to zoom
-• Click beach markers for detailed info
-• ✅ Green checkmark = Field verified data
-• 📏 Dashed lines = Beach width indicators
-
-📊 NEW FEATURES:
-• Beach Width Analysis: Critical parameter for Blue Flag certification
-• Field Verification Status: Shows which beaches have been visited
-• Updated Kuzhuppilly Score: Improved from 63.7 to 78.4 based on field visit
-
-🔧 Updated Tools:
-• Statistics: View comprehensive assessment data including width analysis
-• Field Notes: View field verification findings
-• Measure: Draw lines to measure distances and beach widths
-• Buffer Analysis: Create zones around selected beach
-• Export Data: Download updated assessment data with width parameters
-
-📱 Mobile: Swipe and pinch to navigate on mobile devices
-
-🎯 KEY FINDING: Field verification revealed Kuzhuppilly Beach was in much better condition than initial desk assessment, highlighting the importance of ground-truthing.
-
-Data includes Blue Flag assessment parameters plus beach width analysis based on field measurements and satellite imagery.`);
-        }
-
-        // Initialize layer control events
-        function initializeLayerControls() {
-            document.getElementById('beachLayer').onchange = function() {
-                toggleLayer('beach', this);
-            };
-            document.getElementById('heatmapLayer').onchange = function() {
-                toggleLayer('heatmap', this);
-            };
-            document.getElementById('widthLayer').onchange = function() {
-                toggleLayer('width', this);
-            };
-            document.getElementById('districtLayer').onchange = function() {
-                toggleLayer('district', this);
-            };
-            document.getElementById('certifiedLayer').onchange = function() {
-                toggleLayer('certified', this);
-            };
-            document.getElementById('satelliteLayer').onchange = function() {
-                toggleLayer('satellite', this);
-            };
-        }
-
-        // Initialize everything when page loads
-        window.onload = function() {
-            initMap();
-            populateBeachList();
-            updateStatistics();
-            initializeLayerControls();
-            
-            // Auto-select Kuzhuppilly beach to highlight the field verification improvement
-            selectBeach(1); // Kuzhuppilly is index 1
-            
-            console.log('🏖️ Kerala Beach WebGIS (Updated) loaded successfully!');
-            console.log(`📊 Analyzing ${beachesData.length} beaches with beach width parameter`);
-            console.log(`✅ ${beachesData.filter(beach => beach.fieldVerified).length} beaches field verified`);
-            console.log('🎯 Major update: Kuzhuppilly Beach score improved to 78.4 based on field conditions');
-        };
-
-        // Handle window resize
-        window.onresize = function() {
-            if (map) {
-                map.invalidateSize();
-            }
-        };
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1071,7 +411,7 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
 <body>
     <!-- Header -->
     <div class="header">
-        <h1>🏖️ Kerala Beach Blue Flag Assessment - WebGIS (Updated with Field Survey)</h1>
+        <h1>Kerala Beach Blue Flag Assessment - WebGIS (Updated with Field Survey)</h1>
         <div class="subtitle">Beach Quality Analysis with Beach Width Parameter & Field Verification Data</div>
     </div>
 
@@ -1087,7 +427,7 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
         <div class="sidebar">
             <!-- Beach List Panel -->
             <div class="panel">
-                <h3>🏖️ Beach Assessment Results (Field Verified)</h3>
+                <h3>Beach Assessment Results (Field Verified)</h3>
                 <div id="beachList">
                     <!-- Beach cards will be populated here -->
                 </div>
@@ -1095,7 +435,7 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
 
             <!-- Layer Control Panel -->
             <div class="panel">
-                <h3>🗺️ Map Layers</h3>
+                <h3>Map Layers</h3>
                 <div class="layer-control">
                     <div class="layer-item">
                         <input type="checkbox" id="beachLayer" checked>
@@ -1126,19 +466,19 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
 
             <!-- Analysis Tools Panel -->
             <div class="panel">
-                <h3>🔧 Analysis Tools</h3>
+                <h3>Analysis Tools</h3>
                 <div class="analysis-tools">
-                    <button class="tool-button" onclick="showStatistics()">📊 Statistics</button>
-                    <button class="tool-button" onclick="measureDistance()">📏 Measure</button>
-                    <button class="tool-button" onclick="bufferAnalysis()">⭕ Buffer Analysis</button>
-                    <button class="tool-button" onclick="showFieldNotes()">📝 Field Notes</button>
-                    <button class="tool-button" onclick="exportData()">💾 Export Data</button>
+                    <button class="tool-button" onclick="showStatistics()">Statistics</button>
+                    <button class="tool-button" onclick="measureDistance()">Measure</button>
+                    <button class="tool-button" onclick="bufferAnalysis()">Buffer Analysis</button>
+                    <button class="tool-button" onclick="showFieldNotes()">Field Notes</button>
+                    <button class="tool-button" onclick="exportData()">Export Data</button>
                 </div>
             </div>
 
             <!-- Statistics Panel -->
             <div class="panel">
-                <h3>📈 Assessment Statistics (Updated)</h3>
+                <h3>Assessment Statistics (Updated)</h3>
                 <div class="statistics-container" id="statisticsContainer">
                     <!-- Statistics will be populated here -->
                 </div>
@@ -1152,9 +492,9 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
         <div class="map-container">
             <!-- Toolbar -->
             <div class="toolbar">
-                <button onclick="resetView()">🏠 Home</button>
-                <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
-                <button onclick="showHelp()">❓ Help</button>
+                <button onclick="resetView()">Home</button>
+                <button onclick="toggleFullscreen()">Fullscreen</button>
+                <button onclick="showHelp()">Help</button>
             </div>
 
             <!-- Map -->
@@ -1180,13 +520,13 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                     <span>Bad (<60) - Not Eligible</span>
                 </div>
                 <div style="margin-top: 10px; font-size: 11px; color: #666;">
-                    🟢 Field Verified | 📏 Width Factor Included
+                    Field Verified | Width Factor Included
                 </div>
             </div>
 
             <!-- Info Panel -->
             <div class="info-panel" id="infoPanel">
-                <button class="close-btn" onclick="closeInfoPanel()">&times;</button>
+                <button class="close-btn" onclick="closeInfoPanel()">×</button>
                 <div id="infoPanelContent">
                     <!-- Info content will be populated here -->
                 </div>
@@ -1204,7 +544,13 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
     <script>
-        // Updated beach data with field verification and beach width parameter
+        // Function to calculate overall score including beach width
+        function calculateOverallScore(components) {
+            // Weighted calculation: all 5 components equally weighted
+            return ((components.waterQuality + components.environmental + components.safety + components.infrastructure + components.beachWidth) / 5);
+        }
+
+        // Updated beach data with field verification and beach width parameter properly calculated
         const beachesData = [
             {
                 name: "Cherai Beach",
@@ -1214,9 +560,6 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Ernakulam",
                 type: "semi-rural",
                 beachWidth: 85, // meters - good width for activities
-                widthScore: 85, // scoring out of 100
-                overallScore: 81.2, // increased due to width factor
-                status: "Blue Flag Eligible - Strong Candidate",
                 fieldVerified: true,
                 components: {
                     waterQuality: 82.5,
@@ -1224,6 +567,14 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                     safety: 81.0,
                     infrastructure: 75.5,
                     beachWidth: 85.0
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate with Minor Improvements" :
+                           this.overallScore >= 60 ? "Requires Significant Improvements" : "Not Suitable for Blue Flag";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: true,
@@ -1247,16 +598,21 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Ernakulam",
                 type: "remote",
                 beachWidth: 120, // meters - excellent width
-                widthScore: 95, // excellent width score
-                overallScore: 78.4, // SIGNIFICANTLY IMPROVED from field verification
-                status: "Potential Candidate - Field Conditions Better Than Expected",
                 fieldVerified: true,
                 components: {
                     waterQuality: 78.0,
-                    environmental: 82.5, // improved based on field observation
-                    safety: 75.0, // improved - beach was well-maintained during visit
-                    infrastructure: 68.0, // basic but functional
-                    beachWidth: 95.0 // excellent width
+                    environmental: 85.0, // improved based on field observation
+                    safety: 78.0, // improved - beach was well-maintained during visit
+                    infrastructure: 65.0, // basic but functional
+                    beachWidth: 95.0 // excellent width score
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate - Field Conditions Better Than Expected" :
+                           this.overallScore >= 60 ? "Requires Significant Improvements" : "Not Suitable for Blue Flag";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: true,
@@ -1281,9 +637,6 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Alappuzha",
                 type: "semi-rural",
                 beachWidth: 75, // meters - adequate width
-                widthScore: 75,
-                overallScore: 77.1, // slightly adjusted with width factor
-                status: "Potential Candidate with Minor Improvements",
                 fieldVerified: false,
                 components: {
                     waterQuality: 84.0,
@@ -1291,6 +644,14 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                     safety: 75.0,
                     infrastructure: 68.0,
                     beachWidth: 75.0
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate with Minor Improvements" :
+                           this.overallScore >= 60 ? "Requires Significant Improvements" : "Not Suitable for Blue Flag";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: true,
@@ -1314,16 +675,21 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Ernakulam",
                 type: "semi-rural",
                 beachWidth: 55, // meters - narrow beach
-                widthScore: 55, // impacts capacity and safety zones
-                overallScore: 71.8, // reduced due to width limitation
-                status: "Potential Candidate - Width Constraints",
                 fieldVerified: false,
                 components: {
                     waterQuality: 75.0,
                     environmental: 72.5,
                     safety: 78.0,
                     infrastructure: 71.0,
-                    beachWidth: 55.0
+                    beachWidth: 55.0 // impacts capacity and safety zones
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate - Width Constraints" :
+                           this.overallScore >= 60 ? "Requires Significant Improvements" : "Not Suitable for Blue Flag";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: true,
@@ -1347,16 +713,21 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Alappuzha",
                 type: "urban",
                 beachWidth: 45, // meters - very narrow urban beach
-                widthScore: 45, // poor width score
-                overallScore: 68.2, // reduced due to width constraint
-                status: "Requires Improvements - Width and Water Quality Issues",
                 fieldVerified: false,
                 components: {
                     waterQuality: 68.5,
                     environmental: 65.0,
                     safety: 75.0,
                     infrastructure: 78.0,
-                    beachWidth: 45.0
+                    beachWidth: 45.0 // poor width score
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate with Minor Improvements" :
+                           this.overallScore >= 60 ? "Requires Improvements - Width and Water Quality Issues" : "Not Suitable for Blue Flag";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: false,
@@ -1380,9 +751,6 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Alappuzha",
                 type: "semi-rural",
                 beachWidth: 65, // meters - moderate width
-                widthScore: 65,
-                overallScore: 67.8, // slightly adjusted with width factor
-                status: "Requires Significant Improvements",
                 fieldVerified: false,
                 components: {
                     waterQuality: 72.0,
@@ -1390,6 +758,14 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                     safety: 65.0,
                     infrastructure: 61.0,
                     beachWidth: 65.0
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate with Minor Improvements" :
+                           this.overallScore >= 60 ? "Requires Significant Improvements" : "Not Suitable for Blue Flag";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: true,
@@ -1413,16 +789,21 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
                 district: "Alappuzha",
                 type: "remote",
                 beachWidth: 35, // meters - very narrow
-                widthScore: 35, // very poor width
-                overallScore: 58.7, // reduced significantly due to width limitation
-                status: "Not Suitable - Insufficient Beach Width",
                 fieldVerified: false,
                 components: {
                     waterQuality: 75.5,
                     environmental: 70.0,
                     safety: 48.0,
                     infrastructure: 45.0,
-                    beachWidth: 35.0
+                    beachWidth: 35.0 // very poor width
+                },
+                get overallScore() {
+                    return Math.round(calculateOverallScore(this.components) * 10) / 10;
+                },
+                get status() {
+                    return this.overallScore >= 80 ? "Blue Flag Eligible - Strong Candidate" : 
+                           this.overallScore >= 70 ? "Potential Candidate with Minor Improvements" :
+                           this.overallScore >= 60 ? "Requires Significant Improvements" : "Not Suitable - Insufficient Beach Width";
                 },
                 bacterialAnalysis: {
                     eColiCompliant: true,
@@ -1526,4 +907,654 @@ Data includes Blue Flag assessment parameters plus beach width analysis based on
             
             // Alappuzha district boundary
             const alappuzhaBounds = [[9.4, 76.0], [9.8, 76.4]];
-            L.rectangle
+            L.rectangle(alappuzhaBounds, {
+                color: 'red',
+                weight: 2,
+                fillOpacity: 0.1,
+                dashArray: '5, 5'
+            }).bindPopup('Alappuzha District<br>4 beaches assessed<br>Width constraints identified').addTo(districtLayer);
+
+            // Certified Blue Flag beaches layer
+            certifiedLayer = L.layerGroup().addTo(map);
+            
+            const certifiedBeaches = [
+                { name: 'Kappad Beach', coords: [11.3908, 75.7097] },
+                { name: 'Chal Beach', coords: [12.0077, 75.3447] }
+            ];
+            
+            certifiedBeaches.forEach(beach => {
+                L.marker(beach.coords, {
+                    icon: L.divIcon({
+                        className: 'certified-marker',
+                        html: '🏆',
+                        iconSize: [30, 30]
+                    })
+                }).bindPopup(`✅ ${beach.name}<br>CERTIFIED Blue Flag Beach`).addTo(certifiedLayer);
+            });
+        }
+
+        // Create beach width indicator
+        function createWidthIndicator(beach) {
+            const widthColor = beach.beachWidth >= 80 ? '#28a745' :
+                              beach.beachWidth >= 60 ? '#fd7e14' :
+                              beach.beachWidth >= 40 ? '#dc3545' : '#6c757d';
+            
+            // Create a line perpendicular to the shore to represent beach width
+            const lat = beach.coordinates[0];
+            const lng = beach.coordinates[1];
+            const widthInDegrees = beach.beachWidth * 0.00001; // Approximate conversion for visualization
+            
+            const widthLine = L.polyline([
+                [lat, lng - widthInDegrees/2],
+                [lat, lng + widthInDegrees/2]
+            ], {
+                color: widthColor,
+                weight: 4,
+                opacity: 0.7,
+                dashArray: '10, 5'
+            }).bindPopup(`${beach.name}<br>Beach Width: ${beach.beachWidth}m<br>Width Score: ${beach.components.beachWidth}/100`);
+
+            return widthLine;
+        }
+
+        // Create beach marker with custom styling
+        function createBeachMarker(beach, index) {
+            const score = beach.overallScore;
+            let color, icon;
+            
+            if (score >= 80) {
+                color = '#28a745';
+                icon = '⭐';
+            } else if (score >= 70) {
+                color = '#fd7e14';
+                icon = '🏖️';
+            } else if (score >= 60) {
+                color = '#dc3545';
+                icon = '⚠️';
+            } else {
+                color = '#6c757d';
+                icon = '❌';
+            }
+
+            const fieldVerifiedIcon = beach.fieldVerified ? '✅' : '';
+
+            const marker = L.marker(beach.coordinates, {
+                icon: L.divIcon({
+                    className: 'beach-marker',
+                    html: `<div style="background: ${color}; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 14px; position: relative;">${icon}<span style="position: absolute; top: -8px; right: -8px; font-size: 10px;">${fieldVerifiedIcon}</span></div>`,
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17]
+                })
+            });
+
+            // Create popup content
+            const popupContent = createPopupContent(beach);
+            marker.bindPopup(popupContent, { maxWidth: 400 });
+
+            // Add click event
+            marker.on('click', () => {
+                selectBeach(index);
+                showBeachInfo(beach);
+            });
+
+            return marker;
+        }
+
+        // Create detailed popup content
+        function createPopupContent(beach) {
+            const scoreClass = beach.overallScore >= 80 ? 'score-excellent' :
+                              beach.overallScore >= 70 ? 'score-good' :
+                              beach.overallScore >= 60 ? 'score-poor' : 'score-bad';
+
+            const phoneInfo = beach.phone ? `📞 ${beach.phone}` : '📞 No contact available';
+            const fieldStatus = beach.fieldVerified ? '<div class="field-note">✅ Field Verified Data</div>' : '';
+            const widthStatus = beach.beachWidth >= 80 ? 'Excellent width' :
+                               beach.beachWidth >= 60 ? 'Good width' :
+                               beach.beachWidth >= 40 ? 'Limited width' : 'Insufficient width';
+
+            return `
+                <div class="popup-content">
+                    <div class="popup-header">
+                        <div class="popup-title">${beach.name}</div>
+                        <div class="popup-subtitle">${beach.district} District • ${beach.type.charAt(0).toUpperCase() + beach.type.slice(1)} Beach</div>
+                        <div style="font-size: 11px; margin-top: 3px;">${phoneInfo}</div>
+                    </div>
+                    
+                    ${fieldStatus}
+                    
+                    <div class="score-badge ${scoreClass}">
+                        Overall Score: ${beach.overallScore}/100
+                    </div>
+                    
+                    <div style="margin: 8px 0; color: #666; font-size: 13px;">
+                        ${beach.status}
+                    </div>
+                    
+                    <div style="margin: 10px 0;">
+                        <strong>Beach Width Analysis:</strong><br>
+                        <span style="color: ${beach.beachWidth >= 80 ? '#28a745' : beach.beachWidth >= 60 ? '#fd7e14' : beach.beachWidth >= 40 ? '#dc3545' : '#6c757d'}; font-weight: bold;">
+                            ${beach.beachWidth}m (${widthStatus})
+                        </span>
+                    </div>
+                    
+                    <div style="margin: 10px 0;">
+                        <strong>Component Scores:</strong>
+                        <div class="component-grid">
+                            <div class="component-item">🌊 Water Quality: ${beach.components.waterQuality}/100</div>
+                            <div class="component-item">🌿 Environment: ${beach.components.environmental}/100</div>
+                            <div class="component-item">⚠️ Safety: ${beach.components.safety}/100</div>
+                            <div class="component-item">🏗️ Infrastructure: ${beach.components.infrastructure}/100</div>
+                            <div class="component-item">📏 Beach Width: ${beach.components.beachWidth}/100</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 10px 0;">
+                        <strong>Water Quality Analysis:</strong>
+                        <div style="font-size: 11px; margin-top: 5px;">
+                            E. coli: ${beach.bacterialAnalysis.eColi95th.toFixed(1)} cfu/100ml 
+                            <span style="color: ${beach.bacterialAnalysis.eColiCompliant ? 'green' : 'red'}; font-weight: bold;">
+                                (${beach.bacterialAnalysis.eColiCompliant ? '✓' : '✗'} ≤250)
+                            </span><br>
+                            Enterococci: ${beach.bacterialAnalysis.enterococci95th.toFixed(1)} cfu/100ml 
+                            <span style="color: ${beach.bacterialAnalysis.enterococciCompliant ? 'green' : 'red'}; font-weight: bold;">
+                                (${beach.bacterialAnalysis.enterococciCompliant ? '✓' : '✗'} ≤100)
+                            </span>
+                        </div>
+                    </div>
+                    
+                    ${beach.fieldNotes ? `
+                        <div style="margin: 10px 0;">
+                            <strong>Field Notes:</strong>
+                            <div style="font-size: 11px; padding: 5px; background: #e8f5e8; border-radius: 3px; margin-top: 3px;">
+                                ${beach.fieldNotes}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div style="margin: 10px 0;">
+                        <strong>Address:</strong> ${beach.address}<br>
+                        <strong>Coordinates:</strong> ${beach.coordinates[0].toFixed(4)}°N, ${beach.coordinates[1].toFixed(4)}°E
+                    </div>
+                    
+                    ${beach.criticalIssues.length > 0 ? `
+                        <div style="margin: 10px 0;">
+                            <strong style="color: #dc3545;">Critical Issues:</strong>
+                            <ul style="margin: 5px 0; padding-left: 15px; font-size: 11px;">
+                                ${beach.criticalIssues.map(issue => `<li>${issue}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                    
+                    <div style="margin: 10px 0;">
+                        <strong>Updated Recommendations:</strong>
+                        <ul style="margin: 5px 0; padding-left: 15px; font-size: 11px;">
+                            ${beach.recommendations.slice(0, 3).map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Populate beach list in sidebar
+        function populateBeachList() {
+            const beachList = document.getElementById('beachList');
+            beachList.innerHTML = '';
+
+            beachesData.forEach((beach, index) => {
+                const scoreClass = beach.overallScore >= 80 ? 'excellent' :
+                                 beach.overallScore >= 70 ? 'good' :
+                                 beach.overallScore >= 60 ? 'poor' : 'bad';
+
+                const fieldIcon = beach.fieldVerified ? '✅ ' : '';
+                const widthInfo = `📏 ${beach.beachWidth}m`;
+
+                const beachCard = document.createElement('div');
+                beachCard.className = `beach-card ${scoreClass}`;
+                beachCard.innerHTML = `
+                    <div class="beach-name">${fieldIcon}${beach.name}</div>
+                    <div class="beach-score" style="color: ${
+                        beach.overallScore >= 80 ? '#28a745' :
+                        beach.overallScore >= 70 ? '#fd7e14' :
+                        beach.overallScore >= 60 ? '#dc3545' : '#6c757d'
+                    }">${beach.overallScore}/100</div>
+                    <div class="beach-status">${beach.status}</div>
+                    <div class="beach-district">${beach.district} District${beach.phone ? ` • 📞 ${beach.phone}` : ''}</div>
+                    <div class="beach-width">${widthInfo} • Width Score: ${beach.components.beachWidth}/100</div>
+                `;
+
+                beachCard.onclick = () => {
+                    selectBeach(index);
+                    map.setView(beach.coordinates, 14);
+                    showBeachInfo(beach);
+                };
+
+                beachList.appendChild(beachCard);
+            });
+        }
+
+        // Select beach function
+        function selectBeach(index) {
+            // Remove previous selection
+            document.querySelectorAll('.beach-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            // Add selection to current beach
+            document.querySelectorAll('.beach-card')[index].classList.add('selected');
+            selectedBeach = index;
+        }
+
+        // Show beach information in info panel
+        function showBeachInfo(beach) {
+            const infoPanel = document.getElementById('infoPanel');
+            const content = document.getElementById('infoPanelContent');
+            
+            const fieldStatus = beach.fieldVerified ? '<p style="color: #28a745; font-weight: bold;">✅ Field Verified</p>' : '<p style="color: #666;">📋 Desk Assessment</p>';
+            
+            content.innerHTML = `
+                <h3>${beach.name}</h3>
+                ${fieldStatus}
+                <p><strong>District:</strong> ${beach.district}</p>
+                <p><strong>Type:</strong> ${beach.type.charAt(0).toUpperCase() + beach.type.slice(1)}</p>
+                <p><strong>Beach Width:</strong> ${beach.beachWidth}m (Score: ${beach.components.beachWidth}/100)</p>
+                <p><strong>Overall Score:</strong> ${beach.overallScore}/100</p>
+                <p><strong>Status:</strong> ${beach.status}</p>
+                
+                <h4>Component Scores:</h4>
+                <ul>
+                    <li>Water Quality: ${beach.components.waterQuality}/100</li>
+                    <li>Environmental Management: ${beach.components.environmental}/100</li>
+                    <li>Safety & Services: ${beach.components.safety}/100</li>
+                    <li>Infrastructure: ${beach.components.infrastructure}/100</li>
+                    <li>Beach Width: ${beach.components.beachWidth}/100</li>
+                </ul>
+                
+                <h4>Water Quality Details:</h4>
+                <p>E. coli (95th percentile): ${beach.bacterialAnalysis.eColi95th.toFixed(1)} cfu/100ml</p>
+                <p>Enterococci (95th percentile): ${beach.bacterialAnalysis.enterococci95th.toFixed(1)} cfu/100ml</p>
+                
+                ${beach.fieldNotes ? `<h4>Field Notes:</h4><p style="background: #e8f5e8; padding: 8px; border-radius: 4px; font-size: 13px;">${beach.fieldNotes}</p>` : ''}
+                
+                <h4>Address:</h4>
+                <p>${beach.address}</p>
+                
+                ${beach.phone ? `<h4>Contact:</h4><p>${beach.phone}</p>` : ''}
+            `;
+            
+            infoPanel.classList.add('active');
+        }
+
+        // Close info panel
+        function closeInfoPanel() {
+            document.getElementById('infoPanel').classList.remove('active');
+        }
+
+        // Update statistics
+        function updateStatistics() {
+            const stats = calculateStatistics();
+            const container = document.getElementById('statisticsContainer');
+            
+            container.innerHTML = `
+                <div class="stat-item">
+                    <span class="stat-label">Total Beaches:</span>
+                    <span class="stat-value">${stats.totalBeaches}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Field Verified:</span>
+                    <span class="stat-value">${stats.fieldVerified}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Average Score:</span>
+                    <span class="stat-value">${stats.averageScore}/100</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Average Width:</span>
+                    <span class="stat-value">${stats.averageWidth}m</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Blue Flag Eligible:</span>
+                    <span class="stat-value">${stats.excellent}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Potential Candidates:</span>
+                    <span class="stat-value">${stats.good}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Need Improvement:</span>
+                    <span class="stat-value">${stats.poor}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Width ≥80m:</span>
+                    <span class="stat-value">${stats.excellentWidth}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Width <40m:</span>
+                    <span class="stat-value">${stats.poorWidth}</span>
+                </div>
+            `;
+
+            // Update chart
+            updateScoreChart(stats);
+        }
+
+        // Calculate statistics
+        function calculateStatistics() {
+            const totalBeaches = beachesData.length;
+            const fieldVerified = beachesData.filter(beach => beach.fieldVerified).length;
+            const averageScore = (beachesData.reduce((sum, beach) => sum + beach.overallScore, 0) / totalBeaches).toFixed(1);
+            const averageWidth = Math.round(beachesData.reduce((sum, beach) => sum + beach.beachWidth, 0) / totalBeaches);
+            
+            const excellent = beachesData.filter(beach => beach.overallScore >= 80).length;
+            const good = beachesData.filter(beach => beach.overallScore >= 70 && beach.overallScore < 80).length;
+            const poor = beachesData.filter(beach => beach.overallScore >= 60 && beach.overallScore < 70).length;
+            const bad = beachesData.filter(beach => beach.overallScore < 60).length;
+            
+            const excellentWidth = beachesData.filter(beach => beach.beachWidth >= 80).length;
+            const poorWidth = beachesData.filter(beach => beach.beachWidth < 40).length;
+            
+            return {
+                totalBeaches,
+                fieldVerified,
+                averageScore,
+                averageWidth,
+                excellent,
+                good,
+                poor,
+                bad,
+                excellentWidth,
+                poorWidth
+            };
+        }
+
+        // Update score chart
+        function updateScoreChart(stats) {
+            const ctx = document.getElementById('scoreChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (window.beachChart) {
+                window.beachChart.destroy();
+            }
+
+            window.beachChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Excellent (≥80)', 'Good (70-79)', 'Poor (60-69)', 'Bad (<60)'],
+                    datasets: [{
+                        data: [stats.excellent, stats.good, stats.poor, stats.bad],
+                        backgroundColor: ['#28a745', '#fd7e14', '#dc3545', '#6c757d'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 10
+                                },
+                                padding: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Layer control functions
+        function toggleLayer(layerName, checkbox) {
+            const isChecked = checkbox.checked;
+            
+            switch(layerName) {
+                case 'beach':
+                    if (isChecked) {
+                        map.addLayer(beachLayer);
+                    } else {
+                        map.removeLayer(beachLayer);
+                    }
+                    break;
+                case 'heatmap':
+                    if (isChecked) {
+                        map.addLayer(heatmapLayer);
+                    } else {
+                        map.removeLayer(heatmapLayer);
+                    }
+                    break;
+                case 'width':
+                    if (isChecked) {
+                        map.addLayer(widthLayer);
+                    } else {
+                        map.removeLayer(widthLayer);
+                    }
+                    break;
+                case 'district':
+                    if (isChecked) {
+                        map.addLayer(districtLayer);
+                    } else {
+                        map.removeLayer(districtLayer);
+                    }
+                    break;
+                case 'certified':
+                    if (isChecked) {
+                        map.addLayer(certifiedLayer);
+                    } else {
+                        map.removeLayer(certifiedLayer);
+                    }
+                    break;
+                case 'satellite':
+                    if (isChecked) {
+                        map.addLayer(satelliteLayer);
+                    } else {
+                        map.removeLayer(satelliteLayer);
+                    }
+                    break;
+            }
+        }
+
+        // Analysis tool functions
+        function showStatistics() {
+            const stats = calculateStatistics();
+            alert(`Beach Assessment Statistics (Updated with Beach Width):
+
+Total Beaches: ${stats.totalBeaches}
+Field Verified: ${stats.fieldVerified}
+Average Score: ${stats.averageScore}/100 (including width factor)
+Average Beach Width: ${stats.averageWidth}m
+
+SCORE CATEGORIES:
+Blue Flag Eligible (≥80): ${stats.excellent}
+Potential Candidates (70-79): ${stats.good}
+Need Improvement (60-69): ${stats.poor}
+Not Eligible (<60): ${stats.bad}
+
+BEACH WIDTH ANALYSIS:
+Excellent Width (≥80m): ${stats.excellentWidth}
+Poor Width (<40m): ${stats.poorWidth}
+
+MAJOR UPDATE:
+✅ Kuzhuppilly Beach upgraded to ${beachesData[1].overallScore}/100 based on field verification
+📏 Beach width now properly included in overall scoring (20% weight)
+
+Top Beach: ${beachesData.reduce((prev, current) => (prev.overallScore > current.overallScore) ? prev : current).name} (${beachesData.reduce((prev, current) => (prev.overallScore > current.overallScore) ? prev : current).overallScore}/100)
+Widest Beach: ${beachesData.reduce((prev, current) => (prev.beachWidth > current.beachWidth) ? prev : current).name} (${beachesData.reduce((prev, current) => (prev.beachWidth > current.beachWidth) ? prev : current).beachWidth}m)`);
+        }
+
+        function showFieldNotes() {
+            const fieldVerified = beachesData.filter(beach => beach.fieldVerified);
+            let message = "Field Verification Notes:\n\n";
+            
+            if (fieldVerified.length === 0) {
+                message += "No field verified data available yet.";
+            } else {
+                fieldVerified.forEach(beach => {
+                    message += `✅ ${beach.name}:\n`;
+                    message += `   Overall Score: ${beach.overallScore}/100\n`;
+                    message += `   Beach Width: ${beach.beachWidth}m\n`;
+                    message += `   Field Notes: ${beach.fieldNotes}\n\n`;
+                });
+            }
+            
+            message += "\nKey Finding: Field verification revealed better conditions at Kuzhuppilly Beach, highlighting the importance of ground-truthing desk assessments.";
+            
+            alert(message);
+        }
+
+        function measureDistance() {
+            if (measureControl) {
+                map.removeControl(measureControl);
+                measureControl = null;
+            } else {
+                measureControl = new L.Control.Draw({
+                    draw: {
+                        polyline: {
+                            metric: true
+                        },
+                        polygon: false,
+                        rectangle: false,
+                        circle: false,
+                        marker: false,
+                        circlemarker: false
+                    },
+                    edit: false
+                });
+                map.addControl(measureControl);
+            }
+        }
+
+        function bufferAnalysis() {
+            if (selectedBeach !== null) {
+                const beach = beachesData[selectedBeach];
+                const center = beach.coordinates;
+                
+                // Create buffer zones
+                const buffers = [1000, 2000, 5000];
+                const colors = ['#ff0000', '#ff8800', '#ffff00'];
+                const opacities = [0.3, 0.2, 0.1];
+                
+                buffers.forEach((radius, index) => {
+                    L.circle(center, {
+                        radius: radius,
+                        color: colors[index],
+                        fillColor: colors[index],
+                        fillOpacity: opacities[index],
+                        weight: 2,
+                        dashArray: '5, 5'
+                    }).bindPopup(`Buffer Zone: ${radius/1000}km from ${beach.name}<br>Beach Width: ${beach.beachWidth}m`).addTo(map);
+                });
+                
+                map.setView(center, 11);
+                alert(`Buffer analysis created for ${beach.name}\nZones: 1km, 2km, 5km\nBeach Width: ${beach.beachWidth}m`);
+            } else {
+                alert('Please select a beach first by clicking on a beach marker or card.');
+            }
+        }
+
+        function exportData() {
+            let csvContent = "Beach Name,District,Latitude,Longitude,Overall Score,Beach Width (m),Width Score,Field Verified,Status,Water Quality,Environmental,Safety,Infrastructure,E.coli Compliant,Enterococci Compliant,Phone,Address,Field Notes\n";
+            
+            beachesData.forEach(beach => {
+                csvContent += `"${beach.name}","${beach.district}",${beach.coordinates[0]},${beach.coordinates[1]},${beach.overallScore},${beach.beachWidth},${beach.components.beachWidth},${beach.fieldVerified},"${beach.status}",${beach.components.waterQuality},${beach.components.environmental},${beach.components.safety},${beach.components.infrastructure},${beach.bacterialAnalysis.eColiCompliant},${beach.bacterialAnalysis.enterococciCompliant},"${beach.phone}","${beach.address}","${beach.fieldNotes || ''}"\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kerala_beaches_updated_with_width_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            alert('Updated beach assessment data exported!\nIncludes beach width analysis and field verification status.');
+        }
+
+        // Toolbar functions
+        function resetView() {
+            map.setView([9.8, 76.3], 9);
+            closeInfoPanel();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function showHelp() {
+            alert(`Kerala Beach WebGIS Help (Updated with Width Analysis)
+
+Map Navigation:
+• Click and drag to pan
+• Use mouse wheel or +/- to zoom
+• Click beach markers for detailed info
+• ✅ Green checkmark = Field verified data
+• Dashed lines = Beach width indicators
+
+NEW FEATURES:
+• Beach Width Analysis: Critical parameter for Blue Flag certification
+• Field Verification Status: Shows which beaches have been visited
+• Updated Scoring: Beach width now properly included in overall assessment
+
+Updated Tools:
+• Statistics: View comprehensive assessment data including width analysis
+• Field Notes: View field verification findings
+• Measure: Draw lines to measure distances and beach widths
+• Buffer Analysis: Create zones around selected beach
+• Export Data: Download updated assessment with width parameters
+
+KEY FINDING: Field verification at Kuzhuppilly Beach revealed much better conditions than initial desk assessment, demonstrating the importance of ground-truthing.
+
+Beach width is now properly factored into scoring as it's critical for Blue Flag capacity and safety requirements.`);
+        }
+
+        // Initialize layer control events
+        function initializeLayerControls() {
+            document.getElementById('beachLayer').onchange = function() {
+                toggleLayer('beach', this);
+            };
+            document.getElementById('heatmapLayer').onchange = function() {
+                toggleLayer('heatmap', this);
+            };
+            document.getElementById('widthLayer').onchange = function() {
+                toggleLayer('width', this);
+            };
+            document.getElementById('districtLayer').onchange = function() {
+                toggleLayer('district', this);
+            };
+            document.getElementById('certifiedLayer').onchange = function() {
+                toggleLayer('certified', this);
+            };
+            document.getElementById('satelliteLayer').onchange = function() {
+                toggleLayer('satellite', this);
+            };
+        }
+
+        // Initialize everything when page loads
+        window.onload = function() {
+            initMap();
+            populateBeachList();
+            updateStatistics();
+            initializeLayerControls();
+            
+            // Auto-select Kuzhuppilly beach to highlight the field verification improvement
+            selectBeach(1); // Kuzhuppilly is index 1
+            
+            console.log('Kerala Beach WebGIS (Updated) loaded successfully!');
+            console.log(`Analyzing ${beachesData.length} beaches with beach width parameter`);
+            console.log(`${beachesData.filter(beach => beach.fieldVerified).length} beaches field verified`);
+            console.log('Major update: Kuzhuppilly Beach score improved to', beachesData[1].overallScore, 'based on field conditions');
+        };
+
+        // Handle window resize
+        window.onresize = function() {
+            if (map) {
+                map.invalidateSize();
+            }
+        };
+    </script>
+</body>
+</html>
